@@ -5,9 +5,58 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Database.MongoDB.Structured.Query where
+module Database.MongoDB.Structured.Query
+  ( Filter
+  , Update
+  , (!.)
+  -- Filter operators
+  , filter
+  , (==.)
+  , (!=.)
+  , (<.)
+  , (<=.)
+  , (>.)
+  , (>=.)
+  , (->.)
+  , (!->.)
+  , (||.)
+  , (&&.)
+
+  , Query(..)
+  , select
+  , asc
+  , desc
+
+  -- Update operators
+  , update
+  , (=~)
+  , (+=~)
+  , (-=~)
+  , (*=~)
+  , (/=~)
+
+  , Cursor
+  , nextBatch
+  , next
+  , nextN
+  , rest
+  , closeCursor
+  , isCursorClosed
+
+  -- Operations
+  , find
+  , findOne
+  , count
+  , insert
+  , insertMany
+  , save
+  , modify
+  , delete
+  , deleteOne
+  ) where
 
 import Prelude hiding (Ordering(..), filter, mapM)
+import Control.Applicative ((<$>), (<*>))
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.List (foldl', groupBy)
@@ -22,6 +71,12 @@ import Database.MongoDB.Structured.Types
 
 data OrderExp rec = forall field typ. Selectable rec field typ => Asc field
                   | forall field typ. Selectable rec field typ => Desc field
+
+asc :: forall rec field typ. Selectable rec field typ => field -> OrderExp rec
+asc = Asc
+
+desc :: forall rec field typ. Selectable rec field typ => field -> OrderExp rec
+desc = Desc
 
 orderExpToField :: SerializedEntity rec => OrderExp rec -> Bson.Field
 orderExpToField (Asc f)  = selectableFieldName f Bson.:= Bson.val (1 :: Int)
@@ -180,6 +235,9 @@ updatesToDocument updates =
         mkUpdate op opUpdates = [ op Bson.:= Bson.Doc (concat (map (\(Update{..}) -> [ selectableFieldName updateField Bson.:= toBSON updateValue ]) opUpdates)) ]
 
 
+update :: SerializedEntity rec => Bson.Document -> Update rec
+update = UpdateCustom
+
 (=~) :: (SerializedValue typ, Selectable rec field typ)
      => field -> typ -> Update rec
 field =~ value = Update field SET value
@@ -200,6 +258,12 @@ field *=~ value = Update field MUL value
       => field -> typ -> Update rec
 field /=~ value = Update field MUL (1.0 / value)
 
+
+entityToBSONDoc :: forall rec. SerializedEntity rec => Entity rec -> Bson.Document
+entityToBSONDoc (Entity recId record) = (fieldName (idField :: EntityField rec (Key rec)) =: recId) : toBSONDoc record
+
+entityFromBSONDoc :: forall rec. SerializedEntity rec => Bson.Document -> Parser (Entity rec)
+entityFromBSONDoc doc = Entity <$> doc .: fieldName (idField :: EntityField rec (Key rec)) <*> fromBSONDoc doc
 
 
 newtype SerializedEntity rec => Cursor rec = Cursor { rawCursor :: MongoDB.Cursor }

@@ -5,8 +5,6 @@ module Database.MongoDB.Structured.TH
   , deriveStructuredWith
   , DeriveStructuredOptions(..)
   , defaultDeriveStructuredOptions
-
-  , capitalize
   ) where
 
 import Control.Applicative ((<$>), (<*>), pure)

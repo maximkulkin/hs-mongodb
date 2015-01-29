@@ -71,7 +71,7 @@ run = do
 
    liftIO . print $ (select [UserAddress!.AddressStreetNr ->. [1, 2, 3]])
 
-   let query = (select [UserAddress!.AddressStreetNr ==. 123 ||. UserFavNr >. 3]) { limit = 1, sort = [Asc UserLastName, Asc UserFirstName] }
+   let query = (select [UserAddress!.AddressStreetNr ==. 123 ||. UserFavNr >. 3]) { limit = 1, sort = [asc UserLastName, asc UserFirstName] }
    liftIO $ print query
 
    users <- find query >>= rest

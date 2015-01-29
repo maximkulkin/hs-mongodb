@@ -6,9 +6,18 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 
-module Database.MongoDB.Structured.Types where
+module Database.MongoDB.Structured.Types
+  ( Parser
+  , runParser
 
-import Control.Applicative ((<$>), (<*>))
+  , SerializedValue(..)
+  , SerializedEntity(..)
+  , Entity(..)
+  , (.:)
+  , (=:)
+  ) where
+
+import Control.Applicative ((<$>))
 import qualified Data.Bson as Bson
 import qualified Database.MongoDB as MongoDB
 import Data.Int (Int32, Int64)
@@ -76,13 +85,6 @@ deriving instance (SerializedEntity rec, Eq (Key rec), Eq rec) => Eq (Entity rec
 deriving instance (SerializedEntity rec, Ord (Key rec), Ord rec) => Ord (Entity rec)
 deriving instance (SerializedEntity rec, Show (Key rec), Show rec) => Show (Entity rec)
 deriving instance (SerializedEntity rec, Read (Key rec), Read rec) => Read (Entity rec)
-
-
-entityToBSONDoc :: forall rec. SerializedEntity rec => Entity rec -> Bson.Document
-entityToBSONDoc (Entity recId record) = (fieldName (idField :: EntityField rec (Key rec)) =: recId) : toBSONDoc record
-
-entityFromBSONDoc :: forall rec. SerializedEntity rec => Bson.Document -> Parser (Entity rec)
-entityFromBSONDoc doc = Entity <$> doc .: fieldName (idField :: EntityField rec (Key rec)) <*> fromBSONDoc doc
 
 
 infix 5 =:, .:
