@@ -7,11 +7,11 @@
 
 module Database.MongoDB.Structured.Query where
 
-import Prelude hiding (Ordering(..))
+import Prelude hiding (Ordering(..), filter, mapM)
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Control (MonadBaseControl)
 import Data.List (foldl', groupBy)
-import Data.Maybe (fromMaybe)
+import Data.Traversable (mapM)
 import qualified Data.Text as T
 import Data.Word (Word32)
 import qualified Data.Bson as Bson
@@ -206,18 +206,18 @@ newtype SerializedEntity rec => Cursor rec = Cursor { rawCursor :: MongoDB.Curso
 
 nextBatch :: (MonadIO m, MonadBaseControl IO m, SerializedEntity rec)
           => Cursor rec -> MongoDB.Action m [Entity rec]
-nextBatch (Cursor{..}) = MongoDB.nextBatch rawCursor >>= return . fromMaybe [] . mapM entityFromBSONDoc
+nextBatch (Cursor{..}) = MongoDB.nextBatch rawCursor >>= either fail return . runParser . mapM entityFromBSONDoc
 
 next :: (MonadIO m, MonadBaseControl IO m, SerializedEntity rec)
      => Cursor rec -> MongoDB.Action m (Maybe (Entity rec))
-next (Cursor{..}) = MongoDB.next rawCursor >>= return . (flip (>>=) entityFromBSONDoc)
+next (Cursor{..}) = MongoDB.next rawCursor >>= mapM (either fail return . runParser . entityFromBSONDoc)
 
 nextN :: (MonadIO m, MonadBaseControl IO m, SerializedEntity rec)
       => Int -> Cursor rec -> MongoDB.Action m [Entity rec]
-nextN n (Cursor{..}) = MongoDB.nextN n rawCursor >>= return . fromMaybe [] . mapM entityFromBSONDoc
+nextN n (Cursor{..}) = MongoDB.nextN n rawCursor >>= either fail return . runParser . mapM entityFromBSONDoc
 
 rest :: (MonadIO m, MonadBaseControl IO m, SerializedEntity rec) => Cursor rec -> MongoDB.Action m [Entity rec]
-rest (Cursor{..}) = MongoDB.rest rawCursor >>= return . fromMaybe [] . mapM entityFromBSONDoc
+rest (Cursor{..}) = MongoDB.rest rawCursor >>= either fail return . runParser . mapM entityFromBSONDoc
 
 closeCursor :: (MonadIO m, MonadBaseControl IO m)  => Cursor rec -> MongoDB.Action m ()
 closeCursor (Cursor{..}) = MongoDB.closeCursor rawCursor
@@ -232,9 +232,7 @@ find query = MongoDB.find (queryToMongoDBQuery query) >>= return . Cursor
 
 -- | 
 findOne :: (MonadIO m, SerializedEntity rec) => Query rec -> MongoDB.Action m (Maybe rec)
-findOne query = do
-  mDoc <- MongoDB.findOne (queryToMongoDBQuery query)
-  return (mDoc >>= fromBSONDoc)
+findOne query = MongoDB.findOne (queryToMongoDBQuery query) >>= mapM (either fail return . runParser . fromBSONDoc)
 
 -- |
 count :: (MonadIO m, MonadBaseControl IO m, SerializedEntity rec) => Query rec -> MongoDB.Action m Int

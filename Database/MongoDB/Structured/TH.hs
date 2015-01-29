@@ -76,7 +76,7 @@ deriveStructuredWith opts name = do
             instance SerializedValue $(conT name) where
               toBSON = Bson.Doc . toBSONDoc
               fromBSON (Bson.Doc doc) = fromBSONDoc doc
-              fromBSON _              = Nothing
+              fromBSON _              = fail $(stringE $ "Invalid " ++ nameBase name)
             |]
 
           return $ [ keyTypeDec, serializedEntityDec ] ++ serializedValueDecs
