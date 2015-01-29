@@ -6,10 +6,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE OverlappingInstances #-}
 
 import Control.Applicative ((<$>), (<*>))
 import Control.Monad.IO.Class
 import qualified Data.Bson as Bson
+import Data.Text (Text)
 import Database.MongoDB as MongoDB (Action)
 import Database.MongoDB.Connection
 import Control.Monad (forM_)
@@ -20,13 +22,13 @@ import Database.MongoDB.Structured.TH
 
 
 data Address = Address { streetNr :: Int
-                       , streetName :: String
+                       , streetName :: Text
                        } deriving (Show, Eq)
 $(deriveStructured ''Address)
 
 
-data User = User { firstName :: String
-                 , lastName  :: String
+data User = User { firstName :: Text
+                 , lastName  :: Text
                  , favNr     :: Int
                  , address   :: Address
                  } deriving(Show)
@@ -66,6 +68,8 @@ run = do
    insertUsers
 
    liftIO $ putStrLn "Querying users"
+
+   liftIO . print $ (select [UserAddress!.AddressStreetNr ->. [1, 2, 3]])
 
    let query = (select [UserAddress!.AddressStreetNr ==. 123 ||. UserFavNr >. 3]) { limit = 1, sort = [Asc UserLastName, Asc UserFirstName] }
    liftIO $ print query

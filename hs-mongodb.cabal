@@ -27,6 +27,7 @@ library
                      , mongoDB == 2.0.*
                      , bson == 0.3.*
                      , text == 1.2.*
+                     , time == 1.4.*
                      , transformers == 0.4.*
                      , monad-control == 1.0.*
                      , template-haskell == 2.*

@@ -11,31 +11,36 @@ module Database.MongoDB.Structured.Types where
 import Control.Applicative ((<$>), (<*>))
 import qualified Data.Bson as Bson
 import qualified Database.MongoDB as MongoDB
+import Data.Int (Int32, Int64)
+import Data.Text (Text)
+import Data.Time.Clock (UTCTime)
+import Data.Time.Clock.POSIX (POSIXTime)
 
 class SerializedValue a where
   toBSON :: a -> Bson.Value
   fromBSON :: Bson.Value -> Maybe a
 
-instance SerializedValue Char where
-  toBSON = Bson.val
-  fromBSON = Bson.cast'
 
-instance SerializedValue String where
-  toBSON = Bson.val
-  fromBSON = Bson.cast'
+instance SerializedValue Int       where { toBSON = Bson.val ; fromBSON = Bson.cast' }
+instance SerializedValue Int32     where { toBSON = Bson.val ; fromBSON = Bson.cast' }
+instance SerializedValue Int64     where { toBSON = Bson.val ; fromBSON = Bson.cast' }
+instance SerializedValue Integer   where { toBSON = Bson.val ; fromBSON = Bson.cast' }
+instance SerializedValue Double    where { toBSON = Bson.val ; fromBSON = Bson.cast' }
+instance SerializedValue Float     where { toBSON = Bson.val ; fromBSON = Bson.cast' }
+instance SerializedValue Text      where { toBSON = Bson.val ; fromBSON = Bson.cast' }
+instance SerializedValue POSIXTime where { toBSON = Bson.val ; fromBSON = Bson.cast' }
+instance SerializedValue UTCTime   where { toBSON = Bson.val ; fromBSON = Bson.cast' }
+instance SerializedValue Bson.ObjectId where { toBSON = Bson.val ; fromBSON = Bson.cast' }
 
-instance SerializedValue Int where
-  toBSON = Bson.val
-  fromBSON = Bson.cast'
+instance SerializedValue a => SerializedValue [a] where
+  toBSON = Bson.Array . map toBSON
+  fromBSON (Bson.Array arr) = mapM fromBSON arr
+  fromBSON _ = Nothing
 
-instance SerializedValue Bson.ObjectId where
-  toBSON = Bson.val
-  fromBSON = Bson.cast'
-
--- instance SerializedValue a => SerializedValue [a] where
---   toBSON = Bson.Array . map toBSON
---   fromBSON (Bson.Array arr) = mapM fromBSON arr
---   fromBSON _ = Nothing
+instance SerializedValue a => SerializedValue (Maybe a) where
+  toBSON = maybe Bson.Null toBSON
+  fromBSON Bson.Null = Nothing
+  fromBSON x = Just $ fromBSON x
 
 
 class (SerializedValue (Key rec), Eq (Key rec), Ord (Key rec), Show (Key rec)) => SerializedEntity rec where

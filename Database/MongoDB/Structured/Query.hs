@@ -2,8 +2,6 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE TypeFamilies, MultiParamTypeClasses, FunctionalDependencies, FlexibleContexts, FlexibleInstances #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -52,16 +50,19 @@ data FilterOperator = EQ | NE | GT | GE | LT | LE | IN | NIN deriving (Eq, Show)
 data Filter rec = forall field typ . (SerializedValue typ, Selectable rec field typ) =>
                   Filter { filterField :: field
                          , filterOperator :: FilterOperator
-                         , filterValue :: typ
+                         , filterValue :: Either typ [typ]
                          }
-                | FilterOr [Filter rec]
+                | FilterAnd [Filter rec]
+                | FilterOr  [Filter rec]
                 | FilterCustom Bson.Document
 
+filter :: SerializedEntity rec => Bson.Document -> Filter rec
+filter = FilterCustom
 
 filterToDocument :: SerializedEntity rec => Filter rec -> Bson.Document
 filterToDocument (Filter{..}) =
   case filterOperator of
-    EQ  -> [ selectableFieldName filterField Bson.:= toBSON filterValue ]
+    EQ  -> [ selectableFieldName filterField Bson.:= valueBson ]
     NE  -> mkFilter "$ne"
     GT  -> mkFilter "$gt"
     GE  -> mkFilter "$gte"
@@ -69,8 +70,13 @@ filterToDocument (Filter{..}) =
     LE  -> mkFilter "$lte"
     IN  -> mkFilter "$in"
     NIN -> mkFilter "$nin"
-  where mkFilter op = [ selectableFieldName filterField Bson.:= Bson.Doc [ op Bson.:= toBSON filterValue ] ]
-filterToDocument (FilterOr  filters) = [ "$or" Bson.:= Bson.Array (map (Bson.Doc . filterToDocument) filters) ]
+  where mkFilter op = [ selectableFieldName filterField Bson.:= Bson.Doc [ op Bson.:= valueBson ] ]
+        valueBson = case filterValue of
+                    Left x -> toBSON x
+                    Right xs -> Bson.Array $ map toBSON xs
+
+filterToDocument (FilterAnd filters) = [ "$and" Bson.:= Bson.Array (map (Bson.Doc . filterToDocument) filters) ]
+filterToDocument (FilterOr  filters) = [ "$or"  Bson.:= Bson.Array (map (Bson.Doc . filterToDocument) filters) ]
 filterToDocument (FilterCustom doc) = doc
 
 filtersToDocument :: SerializedEntity rec => [Filter rec] -> Bson.Document
@@ -79,42 +85,48 @@ filtersToDocument = foldl' (\d f -> d ++ (filterToDocument f)) []
 
 (==.) :: (SerializedValue typ, Selectable rec field typ)
       => field -> typ -> Filter rec
-field ==. value = Filter field EQ value
+field ==. value = Filter field EQ (Left value)
 
 (!=.) :: (SerializedValue typ, Selectable rec field typ)
       => field -> typ -> Filter rec
-field !=. value = Filter field NE value
+field !=. value = Filter field NE (Left value)
 
 (<.) :: (SerializedValue typ, Selectable rec field typ)
      => field -> typ -> Filter rec
-field <. value = Filter field LT value
+field <. value = Filter field LT (Left value)
 
 (<=.) :: (SerializedValue typ, Selectable rec field typ)
       => field -> typ -> Filter rec
-field <=. value = Filter field LE value
+field <=. value = Filter field LE (Left value)
 
 (>.) :: (SerializedValue typ, Selectable rec field typ)
      => field -> typ -> Filter rec
-field >. value = Filter field GT value
+field >. value = Filter field GT (Left value)
 
 (>=.) :: (SerializedValue typ, Selectable rec field typ)
       => field -> typ -> Filter rec
-field >=. value = Filter field GE value
+field >=. value = Filter field GE (Left value)
 
--- (->.) :: SerializedValue typ
---       => EntityField rec typ -> [typ] -> Filter rec
--- field ->. values = Filter field IN values
+(->.) :: (SerializedValue typ, Selectable rec field typ)
+      => field -> [typ] -> Filter rec
+field ->. values = Filter field IN (Right values)
 
--- (!->.) :: SerializedValue typ
---        => EntityField rec typ -> [typ] -> Filter rec
--- field !->. values = Filter field NIN values
+(!->.) :: (SerializedValue typ, Selectable rec field typ)
+       => field -> [typ] -> Filter rec
+field !->. values = Filter field NIN (Right values)
 
-infix 0 ||.
+infix 0 ||., &&.
 (||.) :: Filter rec -> Filter rec  -> Filter rec
 (FilterOr f1) ||. (FilterOr f2) = FilterOr (f1++f2)
 (FilterOr f1) ||. f2 = FilterOr (f2:f1)
 f1 ||. (FilterOr f2) = FilterOr (f1:f2)
 f1 ||. f2 = FilterOr (f1:f2:[])
+
+(&&.) :: Filter rec -> Filter rec  -> Filter rec
+(FilterAnd f1) &&. (FilterAnd f2) = FilterAnd (f1++f2)
+(FilterAnd f1) &&. f2 = FilterAnd (f2:f1)
+f1 &&. (FilterAnd f2) = FilterAnd (f1:f2)
+f1 &&. f2 = FilterAnd (f1:f2:[])
 
 
 data Query rec = Query { filters :: [Filter rec]
