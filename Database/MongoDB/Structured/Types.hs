@@ -15,7 +15,12 @@ module Database.MongoDB.Structured.Types
   , Entity(..)
   , (.:)
   , (=:)
+
+  , module Types
   ) where
+
+
+import Data.Bson as Types (Value(..))
 
 import Control.Applicative ((<$>))
 import qualified Data.Bson as Bson
