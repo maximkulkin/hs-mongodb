@@ -5,12 +5,17 @@ module Database.MongoDB.Structured.TH
   , deriveStructuredWith
   , DeriveStructuredOptions(..)
   , defaultDeriveStructuredOptions
+
+  , stripEntityFieldPrefix
+  , capitalize
+  , uncapitalize
   ) where
 
-import Control.Applicative ((<$>), (<*>), pure)
+import Control.Applicative ((<$>), (<*>), (<|>), pure)
 import qualified Data.Bson as Bson
 import qualified Data.Char as Char
-import Data.List (foldl')
+import Data.List (foldl', stripPrefix)
+import Data.Maybe (fromMaybe)
 import Data.Text (Text, unpack)
 import Language.Haskell.TH
 
@@ -20,18 +25,25 @@ capitalize :: String -> String
 capitalize [] = []
 capitalize (c:cs) = Char.toUpper c : cs
 
+uncapitalize :: String -> String
+uncapitalize [] = []
+uncapitalize (c:cs) = Char.toLower c : cs
+
+stripEntityFieldPrefix :: (String -> String) -> String -> String -> String
+stripEntityFieldPrefix f e n = f $ fromMaybe n $ stripPrefix ('_' : uncapitalize e) n <|> stripPrefix (uncapitalize e) n
+
 data DeriveStructuredOptions = DeriveStructuredOptions
-  { mkFieldName :: String -> String
-  , mkConTag :: String -> String
+  { mkFieldName :: String -> String -> String
+  , mkConTag :: String -> String -> String
   , mkEntityFieldName :: String -> String -> String
   , sumTypeFieldName :: String
   }
 
 defaultDeriveStructuredOptions :: DeriveStructuredOptions
 defaultDeriveStructuredOptions = DeriveStructuredOptions
-  { mkFieldName = id
-  , mkConTag = id
-  , mkEntityFieldName = \entity field -> entity ++ capitalize field
+  { mkFieldName = stripEntityFieldPrefix uncapitalize
+  , mkConTag = \_ n -> n
+  , mkEntityFieldName = \entity field -> entity ++ (stripEntityFieldPrefix capitalize entity field)
   , sumTypeFieldName = "type"
   }
 
@@ -82,10 +94,10 @@ deriveStructuredWith opts name = do
         entityName = nameBase name
 
         formatFieldName :: Name -> String
-        formatFieldName = mkFieldName opts . nameBase
+        formatFieldName = mkFieldName opts entityName . nameBase
 
         formatConName :: Name -> String
-        formatConName = mkConTag opts . nameBase
+        formatConName = mkConTag opts entityName . nameBase
 
         formatEntityFieldName :: Name -> Name
         formatEntityFieldName = mkName . mkEntityFieldName opts entityName. nameBase
@@ -93,7 +105,7 @@ deriveStructuredWith opts name = do
         conFields :: Con -> [(Name, Type)]
         conFields (RecC _ fields) = map (\(fName, _, fType) -> (fName, fType)) fields
         conFields _ = []
-          
+
         mkEntityFieldsDec :: [(Name, Type, String)] -> Q Dec
         mkEntityFieldsDec fields = do
           let tv = mkName "typ"

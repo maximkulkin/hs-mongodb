@@ -21,44 +21,47 @@ import Database.MongoDB.Structured
 import Database.MongoDB.Structured.TH
 
 
-data Address = Address { streetNr :: Int
-                       , streetName :: Text
+data Address = Address { addressStreetNr :: Int
+                       , addressStreetName :: Text
                        } deriving (Show, Eq)
 $(deriveStructured ''Address)
 
 
-data User = User { firstName :: Text
-                 , lastName  :: Text
-                 , favNr     :: Int
-                 , address   :: Address
+data User = User { userFirstName :: Text
+                 , userLastName  :: Text
+                 , userFavNr     :: Int
+                 , userAddress   :: Address
                  } deriving(Show)
 $(deriveStructured ''User)
 
 
 insertUsers :: MonadIO m => MongoDB.Action m ()
-insertUsers = insertMany 
-  [ User { firstName = "deian"
-         , lastName = "stefan"
-         , favNr = 3
-         , address = Address { streetNr = 123
-                             , streetName = "Mission"
-                             }
+insertUsers = insertMany
+  [ User { userFirstName = "deian"
+         , userLastName = "stefan"
+         , userFavNr = 3
+         , userAddress = Address
+             { addressStreetNr = 123
+             , addressStreetName = "Mission"
+             }
          }
-  
-  , User { firstName = "amit" 
-         , lastName = "levy"
-         , favNr = 42 
-         , address = Address { streetNr = 42
-                             , streetName = "Market"
-                             }
+
+  , User { userFirstName = "amit"
+         , userLastName = "levy"
+         , userFavNr = 42
+         , userAddress = Address
+             { addressStreetNr = 42
+             , addressStreetName = "Market"
+             }
          }
-  
-  , User { firstName = "david"
-         , lastName = "mazieres"
-         , favNr = 1337 
-         , address = Address { streetNr = 821
-                             , streetName = "Valencia"
-                             }
+
+  , User { userFirstName = "david"
+         , userLastName = "mazieres"
+         , userFavNr = 1337
+         , userAddress = Address
+             { addressStreetNr = 821
+             , addressStreetName = "Valencia"
+             }
          }
   ]
 
