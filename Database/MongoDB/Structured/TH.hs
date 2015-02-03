@@ -1,10 +1,10 @@
 {-# LANGUAGE TemplateHaskell, QuasiQuotes #-}
 
 module Database.MongoDB.Structured.TH
-  ( deriveStructured
-  , deriveStructuredWith
-  , DeriveStructuredOptions(..)
-  , defaultDeriveStructuredOptions
+  ( deriveSerializedEntity
+  , deriveSerializedEntityWith
+  , DeriveSerializedEntityOptions(..)
+  , defaultDeriveSerializedEntityOptions
 
   , stripEntityFieldPrefix
   , capitalize
@@ -32,15 +32,15 @@ uncapitalize (c:cs) = Char.toLower c : cs
 stripEntityFieldPrefix :: (String -> String) -> String -> String -> String
 stripEntityFieldPrefix f e n = f $ fromMaybe n $ stripPrefix ('_' : uncapitalize e) n <|> stripPrefix (uncapitalize e) n
 
-data DeriveStructuredOptions = DeriveStructuredOptions
+data DeriveSerializedEntityOptions = DeriveSerializedEntityOptions
   { mkFieldName :: String -> String -> String
   , mkConTag :: String -> String -> String
   , mkEntityFieldName :: String -> String -> String
   , sumTypeFieldName :: String
   }
 
-defaultDeriveStructuredOptions :: DeriveStructuredOptions
-defaultDeriveStructuredOptions = DeriveStructuredOptions
+defaultDeriveSerializedEntityOptions :: DeriveSerializedEntityOptions
+defaultDeriveSerializedEntityOptions = DeriveSerializedEntityOptions
   { mkFieldName = stripEntityFieldPrefix uncapitalize
   , mkConTag = \_ n -> n
   , mkEntityFieldName = \entity field -> entity ++ (stripEntityFieldPrefix capitalize entity field)
@@ -50,8 +50,8 @@ defaultDeriveStructuredOptions = DeriveStructuredOptions
 infixE' :: ExpQ -> Name -> ExpQ -> ExpQ
 infixE' e1 f e2 = infixE (Just e1) (varE f) (Just e2)
 
-deriveStructuredWith :: DeriveStructuredOptions -> Name -> Q [Dec]
-deriveStructuredWith opts name = do
+deriveSerializedEntityWith :: DeriveSerializedEntityOptions -> Name -> Q [Dec]
+deriveSerializedEntityWith opts name = do
   info <- reify name
   case info of
     TyConI dec ->
@@ -215,5 +215,5 @@ deriveStructuredWith opts name = do
                 recFromBSONDoc _ _ = error "Non-record type where record type expected"
 
 
-deriveStructured :: Name -> Q [Dec]
-deriveStructured = deriveStructuredWith defaultDeriveStructuredOptions
+deriveSerializedEntity :: Name -> Q [Dec]
+deriveSerializedEntity = deriveSerializedEntityWith defaultDeriveSerializedEntityOptions

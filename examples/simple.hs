@@ -24,7 +24,7 @@ import Database.MongoDB.Structured.TH
 data Address = Address { addressStreetNr :: Int
                        , addressStreetName :: Text
                        } deriving (Show, Eq)
-$(deriveStructured ''Address)
+$(deriveSerializedEntity ''Address)
 
 
 data User = User { userFirstName :: Text
@@ -32,7 +32,7 @@ data User = User { userFirstName :: Text
                  , userFavNr     :: Int
                  , userAddress   :: Address
                  } deriving(Show)
-$(deriveStructured ''User)
+$(deriveSerializedEntity ''User)
 
 
 insertUsers :: MonadIO m => MongoDB.Action m ()
