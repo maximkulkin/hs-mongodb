@@ -5,6 +5,7 @@ module Database.MongoDB.Structured.TH
   , deriveSerializedEntityWith
   , DeriveSerializedEntityOptions(..)
   , defaultDeriveSerializedEntityOptions
+  , deriveSerializedValue
 
   , stripEntityFieldPrefix
   , capitalize
@@ -16,8 +17,10 @@ import qualified Data.Bson as Bson
 import qualified Data.Char as Char
 import Data.List (foldl', stripPrefix)
 import Data.Maybe (fromMaybe)
-import Data.Text (Text, unpack)
+import Data.Text (Text)
+import qualified Data.Text as T
 import Language.Haskell.TH
+import Text.Read (readMaybe)
 
 import Database.MongoDB.Structured.Types
 
@@ -193,7 +196,7 @@ deriveSerializedEntityWith opts name = do
                                      infixE' (stringE $ "Unknown " ++ (nameBase name) ++ " type: ") '(++) (varE t)
                                    )) [])
                         , (match (conP 'Left [varP e])
-                                 (normalB $ [|fail $(varE 'unpack `appE` varE e)|]) [])
+                                 (normalB $ [|fail $(varE 'T.unpack `appE` varE e)|]) [])
                         ]
                      ) []
                  , clause [wildP] (normalB $ [|fail $(stringE $ "Invalid " ++ nameBase name)|]) []
@@ -217,3 +220,12 @@ deriveSerializedEntityWith opts name = do
 
 deriveSerializedEntity :: Name -> Q [Dec]
 deriveSerializedEntity = deriveSerializedEntityWith defaultDeriveSerializedEntityOptions
+
+
+deriveSerializedValue :: Name -> Q [Dec]
+deriveSerializedValue name = [d|
+    instance SerializedValue $(conT name) where
+      toBSON = Bson.String . T.pack . show
+      fromBSON (Bson.String t) = readMaybe . T.unpack $ t
+      fromBSON x = fail $ $( stringE $ "Invalid " ++ nameBase name ++ " value: ") ++ show x
+  |]
