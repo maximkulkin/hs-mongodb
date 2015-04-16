@@ -23,13 +23,13 @@ library
                      , Database.MongoDB.Structured.Query
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.7 && <4.8
+  build-depends:       base >=4.6 && <4.8
                      , mongoDB == 2.0.*
                      , bson == 0.3.*
-                     , text == 1.2.*
+                     , text == 1.*
                      , time == 1.4.*
                      , transformers == 0.4.*
-                     , monad-control == 1.0.*
+                     , monad-control == 0.3.*
                      , template-haskell == 2.*
   -- hs-source-dirs:
   ghc-options:        -Wall -fno-warn-orphans
@@ -38,10 +38,10 @@ library
 executable simple
   main-is:           simple.hs
   hs-source-dirs:    examples
-  build-depends:       base >=4.7 && <4.8
+  build-depends:       base >=4.6 && <4.8
                      , mongoDB == 2.0.*
                      , bson == 0.3.*
-                     , text == 1.2.*
+                     , text == 1.*
                      , transformers == 0.4.*
-                     , monad-control == 1.0.*
+                     , monad-control == 0.3.*
                      , hs-mongodb == 0.1.*
