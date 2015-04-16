@@ -171,7 +171,6 @@ deriveSerializedEntityWith opts name = do
                                            [|$(conE cname) <$> $x|]
                                            xs
                      ) []
-                 , clause [wildP] (normalB $ [|fail $(stringE $ "Invalid " ++ nameBase name)|]) []
                  ]
 
         mkFromBSONDocBody cons = do
@@ -199,7 +198,6 @@ deriveSerializedEntityWith opts name = do
                                  (normalB $ [|fail $(varE 'T.unpack `appE` varE e)|]) [])
                         ]
                      ) []
-                 , clause [wildP] (normalB $ [|fail $(stringE $ "Invalid " ++ nameBase name)|]) []
                  ]
 
           where recFromBSONDoc :: Con -> Name -> ExpQ
