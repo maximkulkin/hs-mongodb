@@ -47,12 +47,15 @@ bsonVal = Bson.val
 bsonCast :: Bson.Val a => String -> Bson.Value -> Parser a
 bsonCast typeName = maybe (fail $ "Invalid " ++ typeName) return . Bson.cast' 
 
+instance SerializedValue Bool      where { toBSON = bsonVal ; fromBSON = bsonCast "Bool" }
 instance SerializedValue Int       where { toBSON = bsonVal ; fromBSON = bsonCast "Int" }
 instance SerializedValue Int32     where { toBSON = bsonVal ; fromBSON = bsonCast "Int32" }
 instance SerializedValue Int64     where { toBSON = bsonVal ; fromBSON = bsonCast "Int64" }
 instance SerializedValue Integer   where { toBSON = bsonVal ; fromBSON = bsonCast "Integer" }
 instance SerializedValue Double    where { toBSON = bsonVal ; fromBSON = bsonCast "Double" }
 instance SerializedValue Float     where { toBSON = bsonVal ; fromBSON = bsonCast "Float" }
+instance SerializedValue Char      where { toBSON = bsonVal ; fromBSON = bsonCast "Char" }
+instance SerializedValue String    where { toBSON = bsonVal ; fromBSON = bsonCast "String" }
 instance SerializedValue Text      where { toBSON = bsonVal ; fromBSON = bsonCast "Text" }
 instance SerializedValue POSIXTime where { toBSON = bsonVal ; fromBSON = bsonCast "POSIX time" }
 instance SerializedValue UTCTime   where { toBSON = bsonVal ; fromBSON = bsonCast "UTC time" }
