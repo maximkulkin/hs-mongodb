@@ -19,6 +19,7 @@ import Control.Monad (forM_)
 import Database.MongoDB (access, master)
 import Database.MongoDB.Structured
 import Database.MongoDB.Structured.TH
+import SumTypeExample
 
 
 data Address = Address { addressStreetNr :: Int

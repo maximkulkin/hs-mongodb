@@ -26,6 +26,7 @@ library
   build-depends:       base >=4.6 && <4.8
                      , mongoDB == 2.0.*
                      , bson == 0.3.*
+                     , containers == 0.5.*
                      , text == 1.*
                      , time == 1.4.*
                      , transformers == 0.4.*

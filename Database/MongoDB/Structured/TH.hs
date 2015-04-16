@@ -17,6 +17,7 @@ import qualified Data.Bson as Bson
 import qualified Data.Char as Char
 import Data.List (foldl', stripPrefix)
 import Data.Maybe (fromMaybe)
+import qualified Data.Map as Map
 import Data.Text (Text)
 import qualified Data.Text as T
 import Language.Haskell.TH
@@ -67,7 +68,7 @@ deriveSerializedEntityWith opts name = do
         f _tvbs cons = do
           let colName = map Char.toLower $ nameBase name
               keyTypeName = mkName $ nameBase name ++ "Id"
-              fields = (mkName "Id", (ConT keyTypeName), "_id") : (map (\(n, t) -> (n, t, formatFieldName n)) $ foldl' (++) [] $ mapM conFields cons)
+              fields = filterDuplicateFields $ (mkName "Id", (ConT keyTypeName), "_id") : (map (\(n, t) -> (n, t, formatFieldName n)) $ foldl' (++) [] $ map conFields cons)
 
           let keyTypeDec = TySynD keyTypeName [] (ConT ''Bson.ObjectId)
           keyDec <- tySynInstD ''Key $ pure $ TySynEqn [ConT name] (ConT keyTypeName)
@@ -108,6 +109,16 @@ deriveSerializedEntityWith opts name = do
         conFields :: Con -> [(Name, Type)]
         conFields (RecC _ fields) = map (\(fName, _, fType) -> (fName, fType)) fields
         conFields _ = []
+
+        filterDuplicateFields :: [(Name, Type, String)] -> [(Name, Type, String)]
+        filterDuplicateFields = reverse . snd . foldl' (\(fieldTypes, fields) field@(fName, fType, _) ->
+          let mType = Map.lookup fName fieldTypes
+           in case mType of
+                Nothing -> (Map.insert fName fType fieldTypes, field : fields)
+                Just prevType -> if prevType /= fType
+                                 then error $ "Duplicate field " ++ nameBase fName ++ " with different types"
+                                 else (fieldTypes, fields)
+          ) (Map.empty, [])
 
         mkEntityFieldsDec :: [(Name, Type, String)] -> Q Dec
         mkEntityFieldsDec fields = do
@@ -195,7 +206,7 @@ deriveSerializedEntityWith opts name = do
                                      infixE' (stringE $ "Unknown " ++ (nameBase name) ++ " type: ") '(++) (varE t)
                                    )) [])
                         , (match (conP 'Left [varP e])
-                                 (normalB $ [|fail $(varE 'T.unpack `appE` varE e)|]) [])
+                                 (normalB $ [|fail $(varE e)|]) [])
                         ]
                      ) []
                  ]
