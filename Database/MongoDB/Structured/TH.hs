@@ -20,7 +20,7 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Language.Haskell.TH
-import Text.Read (readMaybe)
+import Text.Read (readEither)
 
 import Database.MongoDB.Structured.Types
 
@@ -226,6 +226,6 @@ deriveSerializedValue :: Name -> Q [Dec]
 deriveSerializedValue name = [d|
     instance SerializedValue $(conT name) where
       toBSON = Bson.String . T.pack . show
-      fromBSON (Bson.String t) = readMaybe . T.unpack $ t
+      fromBSON (Bson.String t) = readEither . T.unpack $ t
       fromBSON x = fail $ $( stringE $ "Invalid " ++ nameBase name ++ " value: ") ++ show x
   |]
