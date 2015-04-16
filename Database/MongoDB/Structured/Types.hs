@@ -26,6 +26,7 @@ import Control.Applicative ((<$>))
 import qualified Data.Bson as Bson
 import qualified Database.MongoDB as MongoDB
 import Data.Int (Int32, Int64)
+import Data.Monoid
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock (UTCTime)
@@ -45,7 +46,7 @@ bsonVal :: Bson.Val a => a -> Bson.Value
 bsonVal = Bson.val
 
 bsonCast :: Bson.Val a => String -> Bson.Value -> Parser a
-bsonCast typeName = maybe (fail $ "Invalid " ++ typeName) return . Bson.cast' 
+bsonCast typeName value = maybe (fail $ "Invalid " <> typeName <> " BSON value: \"" <> show value <> "\"") return $ Bson.cast' value
 
 instance SerializedValue Bool      where { toBSON = bsonVal ; fromBSON = bsonCast "Bool" }
 instance SerializedValue Int       where { toBSON = bsonVal ; fromBSON = bsonCast "Int" }
