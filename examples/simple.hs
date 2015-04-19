@@ -20,6 +20,7 @@ import Database.MongoDB (access, master)
 import Database.MongoDB.Structured
 import Database.MongoDB.Structured.TH
 import SumTypeExample
+import PlainDataExample
 
 
 data Address = Address { addressStreetNr :: Int

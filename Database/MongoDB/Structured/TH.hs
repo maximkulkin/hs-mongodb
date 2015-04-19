@@ -1,4 +1,6 @@
 {-# LANGUAGE TemplateHaskell, QuasiQuotes #-}
+{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Database.MongoDB.Structured.TH
   ( deriveSerializedEntity
@@ -37,9 +39,9 @@ stripEntityFieldPrefix :: (String -> String) -> String -> String -> String
 stripEntityFieldPrefix f e n = f $ fromMaybe n $ stripPrefix ('_' : uncapitalize e) n <|> stripPrefix (uncapitalize e) n
 
 data DeriveSerializedEntityOptions = DeriveSerializedEntityOptions
-  { mkFieldName :: String -> String -> String
-  , mkConTag :: String -> String -> String
-  , mkEntityFieldName :: String -> String -> String
+  { mkFieldName :: String -> String -> String        -- | entity name -> field name -> String
+  , mkConTag :: String -> String -> String           -- | entity name -> con name -> String
+  , mkEntityFieldName :: String -> String -> String  -- | entity name -> field name -> String
   , sumTypeFieldName :: String
   }
 
@@ -55,7 +57,7 @@ infixE' :: ExpQ -> Name -> ExpQ -> ExpQ
 infixE' e1 f e2 = infixE (Just e1) (varE f) (Just e2)
 
 deriveSerializedEntityWith :: DeriveSerializedEntityOptions -> Name -> Q [Dec]
-deriveSerializedEntityWith opts name = do
+deriveSerializedEntityWith DeriveSerializedEntityOptions{..} name = do
   info <- reify name
   case info of
     TyConI dec ->
@@ -68,7 +70,10 @@ deriveSerializedEntityWith opts name = do
         f _tvbs cons = do
           let colName = map Char.toLower $ nameBase name
               keyTypeName = mkName $ nameBase name ++ "Id"
-              fields = filterDuplicateFields $ (mkName "Id", (ConT keyTypeName), "_id") : (map (\(n, t) -> (n, t, formatFieldName n)) $ foldl' (++) [] $ map conFields cons)
+              fields = filterDuplicateFields $ ("Id", (ConT keyTypeName), "_id") : (
+                foldl' (++) [] $
+                  map (\con -> map (\(n, t) -> (n, t, formatFieldName n)) $ conFields con) cons
+                )
 
           let keyTypeDec = TySynD keyTypeName [] (ConT ''Bson.ObjectId)
           keyDec <- tySynInstD ''Key $ pure $ TySynEqn [ConT name] (ConT keyTypeName)
@@ -81,7 +86,7 @@ deriveSerializedEntityWith opts name = do
             [ pure keyDec
             , pure entityFieldsDec
             , funD 'collectionName [ clause [wildP] (normalB $ stringE colName) [] ]
-            , funD 'idField [ clause [] (normalB $ conE (formatEntityFieldName (mkName "Id"))) [] ]
+            , funD 'idField [ clause [] (normalB $ conE (mkName $ formatEntityFieldName "Id")) [] ]
             , funD 'fieldName fieldNameBody
             , funD 'toBSONDoc toBSONDocBody
             , funD 'fromBSONDoc fromBSONDocBody
@@ -97,43 +102,53 @@ deriveSerializedEntityWith opts name = do
 
         entityName = nameBase name
 
-        formatFieldName :: Name -> String
-        formatFieldName = mkFieldName opts entityName . nameBase
+        formatFieldName :: String -> String
+        formatFieldName = mkFieldName entityName
 
-        formatConName :: Name -> String
-        formatConName = mkConTag opts entityName . nameBase
+        formatConName :: String -> String
+        formatConName = mkConTag entityName
 
-        formatEntityFieldName :: Name -> Name
-        formatEntityFieldName = mkName . mkEntityFieldName opts entityName. nameBase
+        formatEntityFieldName :: String -> String
+        formatEntityFieldName = mkEntityFieldName entityName
 
-        conFields :: Con -> [(Name, Type)]
-        conFields (RecC _ fields) = map (\(fName, _, fType) -> (fName, fType)) fields
-        conFields _ = []
+        conName (NormalC n _)  = nameBase n
+        conName (RecC n _)     = nameBase n
+        conName (InfixC _ n _) = nameBase n
+        conName (ForallC _ _ con) = conName con
 
-        filterDuplicateFields :: [(Name, Type, String)] -> [(Name, Type, String)]
+        conFields :: Con -> [(String, Type)]
+        conFields (NormalC cname fieldTypes) =
+          let fieldPrefix = case nameBase cname of
+                              (s:ss) -> (Char.toLower s : ss) ++ "_"
+                              [] -> []
+           in map (\(fIdx, (_, fType)) -> (fieldPrefix ++ show fIdx, fType)) $ zip ([0..] :: [Int]) fieldTypes
+        conFields (RecC _ ts) = map (\(fName, _, fType) -> (nameBase fName, fType)) ts
+        conFields (ForallC _ _ con) = conFields con
+        conFields con = fail $ "Unsupported data constructor type: " ++ conName con
+
+        filterDuplicateFields :: [(String, Type, String)] -> [(String, Type, String)]
         filterDuplicateFields = reverse . snd . foldl' (\(fieldTypes, fields) field@(fName, fType, _) ->
           let mType = Map.lookup fName fieldTypes
            in case mType of
                 Nothing -> (Map.insert fName fType fieldTypes, field : fields)
-                Just prevType -> if prevType /= fType
-                                 then error $ "Duplicate field " ++ nameBase fName ++ " with different types"
-                                 else (fieldTypes, fields)
+                Just _ -> (fieldTypes, fields)
           ) (Map.empty, [])
 
-        mkEntityFieldsDec :: [(Name, Type, String)] -> Q Dec
+        mkEntityFieldsDec :: [(String, Type, String)] -> Q Dec
         mkEntityFieldsDec fields = do
           let tv = mkName "typ"
-              fieldCons = map (\(fName, fType, _) -> do
+              fieldCons = map (\(fName, fType) -> do
                                 ForallC []
                                         [EqualP (VarT tv) fType]
-                                        (NormalC (formatEntityFieldName fName) [])
-                              ) fields
+                                        (NormalC (mkName fName) [])
+                              ) $ filter ((/="").fst)
+                                $ map (\(fName, fType, _) -> (formatEntityFieldName fName, fType)) fields
           return $ DataInstD [] ''EntityField [ConT name, VarT tv] fieldCons []
 
-        mkFieldNameBody :: [(Name, Type, String)] -> Q [ClauseQ]
+        mkFieldNameBody :: [(String, Type, String)] -> Q [ClauseQ]
         mkFieldNameBody fields = do
           let fieldClauses = map (\(fName, _, fSerializedName) ->
-                                    clause [conP (formatEntityFieldName fName) []]
+                                    clause [conP (mkName $ formatEntityFieldName fName) []]
                                            (normalB $ stringE fSerializedName)
                                            []
                                  ) fields
@@ -144,35 +159,28 @@ deriveSerializedEntityWith opts name = do
         mkToBSONDocBody cons = fmap (foldl' (++) [] ) $ mapM (flip conToBSONDoc True) cons
 
         conToBSONDoc :: Con -> Bool -> Q [ClauseQ]
-        conToBSONDoc (RecC cname ts) sumType = do
-          let argNames = map (\(fName, _, _) -> mkName ("a_" ++ nameBase fName)) ts
-          return [ clause [conP cname (map varP argNames)]
+        conToBSONDoc con sumType = do
+          let argNames = map (\(fName, _) -> mkName ("a_" ++ fName)) fields
+
+          return [ clause [conP (mkName cname) (map varP argNames)]
                      ( normalB $ listE $
                        maybe [] (:[]) typeFieldE ++
-                       map (\((field, _, _),argName) ->
+                       map (\((field, _),argName) ->
                              [|$(stringE $ formatFieldName field) =: $(varE argName)|]
-                           ) (zip ts argNames)
+                           ) (zip fields argNames)
                      ) []
                  ]
-          where typeFieldE = if sumType
-                             then Just [|$(stringE (sumTypeFieldName opts)) =: ($(stringE $ formatConName cname) :: Text) |]
+          where cname = conName con
+                fields = conFields con
+                typeFieldE = if sumType
+                             then Just [|$(stringE sumTypeFieldName) =: ($(stringE $ formatConName cname) :: Text) |]
                              else Nothing
 
-        conToBSONDoc (NormalC cname []) _ = do
-          return [ clause [conP cname []] (normalB $ (listE [])) [] ]
-        -- TODO: implement serializing normal constructors with args
-
-        conToBSONDoc con _ = fail $ "Unsupported data constructor type: " ++ conName con
-
-        conName (NormalC n _)  = nameBase n
-        conName (RecC n _)     = nameBase n
-        conName (InfixC _ n _) = nameBase n
-        conName (ForallC _ _ con) = conName con
-
         mkFromBSONDocBody :: [Con] -> Q [ClauseQ]
-        mkFromBSONDocBody [RecC cname ts] = do
+        mkFromBSONDocBody [con] = do
           let doc = mkName "doc"
-              lookups = map (\(field, _, _) -> [|$(varE doc) .: $(stringE $ formatFieldName field)|]) ts
+              cname = mkName $ conName con
+              lookups = map (\(field, _) -> [|$(varE doc) .: $(stringE $ formatFieldName field)|]) (conFields con)
           return [ clause [varP doc]
                      (normalB $
                         case lookups of
@@ -188,18 +196,13 @@ deriveSerializedEntityWith opts name = do
           let doc = mkName "doc"
           e <- newName "e"
           t <- newName "t"
-          let typeLookup = [|$(varE doc) .: $(stringE (sumTypeFieldName opts))|]
+          let typeLookup = [|$(varE doc) .: $(stringE sumTypeFieldName)|]
           return [ clause [varP doc]
                      (normalB $ caseE typeLookup $
                         (flip map cons $ \con ->
-                          case con of
-                            RecC cname _ -> match (conP 'Right [litP (StringL $ formatConName cname)])
-                                                     (normalB $ recFromBSONDoc con doc)
-                                                     []
-                            NormalC cname [] -> match (conP 'Right [litP (StringL $ formatConName cname)])
-                                                     (normalB $ [|return $(conE cname)|])
-                                                     []
-                            _ -> fail $ "Unsupported data constructor type: " ++ conName con
+                          match (conP 'Right [litP (StringL $ formatConName (conName con))])
+                                (normalB $ recFromBSONDoc con doc)
+                                []
                         ) ++
                         [ (match (conP 'Right [varP t])
                                  (normalB $ varE 'fail `appE` (
@@ -212,19 +215,16 @@ deriveSerializedEntityWith opts name = do
                  ]
 
           where recFromBSONDoc :: Con -> Name -> ExpQ
-                recFromBSONDoc (RecC cname ts) doc = do
-                  let lookups = map (\(field, _, _) -> infixE' (varE doc) '(.:) (stringE $ formatFieldName field)) ts
+                recFromBSONDoc con doc = do
+                  let cname = mkName $ conName con
+                      lookups = map (\(field, _) -> infixE' (varE doc) '(.:) (stringE $ formatFieldName field))
+                                    (conFields con)
                   case lookups of
                     [] -> conE cname
                     [x] -> infixE' (conE cname) '(<$>) x
                     (x:xs) -> foldl' (\i e -> infixE' i '(<*>) e)
                                      (infixE' (conE cname) '(<$>) x)
                                      xs
-
-                recFromBSONDoc (NormalC cname []) _ = conE cname
-                -- TODO: implement deserializing normal constructors with args
-
-                recFromBSONDoc _ _ = error "Non-record type where record type expected"
 
 
 deriveSerializedEntity :: Name -> Q [Dec]
