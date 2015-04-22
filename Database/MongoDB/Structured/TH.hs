@@ -44,6 +44,7 @@ data DeriveSerializedEntityOptions = DeriveSerializedEntityOptions
   , mkConTag :: String -> String -> String           -- | entity name -> con name -> String
   , mkEntityFieldName :: String -> String -> String  -- | entity name -> field name -> String
   , sumTypeFieldName :: String
+  , mkCollectionName :: String -> String
   }
 
 defaultDeriveSerializedEntityOptions :: DeriveSerializedEntityOptions
@@ -52,6 +53,7 @@ defaultDeriveSerializedEntityOptions = DeriveSerializedEntityOptions
   , mkConTag = \_ n -> n
   , mkEntityFieldName = \entity field -> entity ++ (stripEntityFieldPrefix capitalize entity field)
   , sumTypeFieldName = "type"
+  , mkCollectionName = map Char.toLower
   }
 
 infixE' :: ExpQ -> Name -> ExpQ -> ExpQ
@@ -69,7 +71,7 @@ deriveSerializedEntityWith DeriveSerializedEntityOptions{..} name = do
 
   where f :: [TyVarBndr] -> [Con] -> DecsQ
         f _tvbs cons = do
-          let colName = map Char.toLower $ nameBase name
+          let colName = mkCollectionName $ nameBase name
               keyTypeName = mkName $ nameBase name ++ "Id"
               fields = filterDuplicateFields $ ("Id", (ConT keyTypeName), "_id") : (
                 foldl' (++) [] $
