@@ -73,7 +73,7 @@ deriveSerializedEntityWith DeriveSerializedEntityOptions{..} name = do
               keyTypeName = mkName $ nameBase name ++ "Id"
               fields = filterDuplicateFields $ ("Id", (ConT keyTypeName), "_id") : (
                 foldl' (++) [] $
-                  map (\con -> map (\(n, t) -> (n, t, formatFieldName n)) $ conFields con) cons
+                  map (\con -> map (\(n, t) -> (n, t, mkFieldName entityName n)) $ conFields con) cons
                 )
 
           let keyTypeDec = TySynD keyTypeName [] (ConT ''Bson.ObjectId)
@@ -91,7 +91,7 @@ deriveSerializedEntityWith DeriveSerializedEntityOptions{..} name = do
             [ pure keyDec
             , pure entityFieldsDec
             , funD 'collectionName [ clause [wildP] (normalB $ stringE colName) [] ]
-            , funD 'idField [ clause [] (normalB $ conE (mkName $ formatEntityFieldName "Id")) [] ]
+            , funD 'idField [ clause [] (normalB $ conE (mkName $ mkEntityFieldName entityName "Id")) [] ]
             , funD 'fieldName fieldNameBody
             , funD 'toBSONDoc toBSONDocBody
             , funD 'fromBSONDoc fromBSONDocBody
@@ -106,15 +106,6 @@ deriveSerializedEntityWith DeriveSerializedEntityOptions{..} name = do
           return $ [ keyTypeDec, serializedEntityDec ] ++ serializedValueDecs
 
         entityName = nameBase name
-
-        formatFieldName :: String -> String
-        formatFieldName = mkFieldName entityName
-
-        formatConName :: String -> String
-        formatConName = mkConTag entityName
-
-        formatEntityFieldName :: String -> String
-        formatEntityFieldName = mkEntityFieldName entityName
 
         conName (NormalC n _)  = nameBase n
         conName (RecC n _)     = nameBase n
@@ -147,13 +138,13 @@ deriveSerializedEntityWith DeriveSerializedEntityOptions{..} name = do
                                         [EqualP (VarT tv) fType]
                                         (NormalC (mkName fName) [])
                               ) $ filter ((/="").fst)
-                                $ map (\(fName, fType, _) -> (formatEntityFieldName fName, fType)) fields
+                                $ map (\(fName, fType, _) -> (mkEntityFieldName entityName fName, fType)) fields
           return $ DataInstD [] ''EntityField [ConT name, VarT tv] fieldCons []
 
         mkFieldNameBody :: [(String, Type, String)] -> Q [ClauseQ]
         mkFieldNameBody fields = do
           let fieldClauses = map (\(fName, _, fSerializedName) ->
-                                    clause [conP (mkName $ formatEntityFieldName fName) []]
+                                    clause [conP (mkName $ mkEntityFieldName entityName fName) []]
                                            (normalB $ stringE fSerializedName)
                                            []
                                  ) fields
@@ -171,21 +162,21 @@ deriveSerializedEntityWith DeriveSerializedEntityOptions{..} name = do
                      ( normalB $ listE $
                        maybe [] (:[]) typeFieldE ++
                        map (\((field, _),argName) ->
-                             [|$(stringE $ formatFieldName field) =: $(varE argName)|]
+                             [|$(stringE $ mkFieldName entityName field) =: $(varE argName)|]
                            ) (zip fields argNames)
                      ) []
                  ]
           where cname = conName con
                 fields = conFields con
                 typeFieldE = if sumType
-                             then Just [|$(stringE sumTypeFieldName) =: ($(stringE $ formatConName cname) :: Text) |]
+                             then Just [|$(stringE sumTypeFieldName) =: ($(stringE $ mkConTag entityName cname) :: Text) |]
                              else Nothing
 
         mkFromBSONDocBody :: [Con] -> Q [ClauseQ]
         mkFromBSONDocBody [con] = do
           let doc = mkName "doc"
               cname = mkName $ conName con
-              lookups = map (\(field, _) -> [|$(varE doc) .: $(stringE $ formatFieldName field)|]) (conFields con)
+              lookups = map (\(field, _) -> [|$(varE doc) .: $(stringE $ mkFieldName entityName field)|]) (conFields con)
           return [ clause [varP doc]
                      (normalB $
                         case lookups of
@@ -205,7 +196,7 @@ deriveSerializedEntityWith DeriveSerializedEntityOptions{..} name = do
           return [ clause [varP doc]
                      (normalB $ caseE typeLookup $
                         (flip map cons $ \con ->
-                          match (conP 'Right [litP (StringL $ formatConName (conName con))])
+                          match (conP 'Right [litP (StringL $ mkConTag entityName (conName con))])
                                 (normalB $ recFromBSONDoc con doc)
                                 []
                         ) ++
@@ -222,7 +213,7 @@ deriveSerializedEntityWith DeriveSerializedEntityOptions{..} name = do
           where recFromBSONDoc :: Con -> Name -> ExpQ
                 recFromBSONDoc con doc = do
                   let cname = mkName $ conName con
-                      lookups = map (\(field, _) -> infixE' (varE doc) '(.:) (stringE $ formatFieldName field))
+                      lookups = map (\(field, _) -> infixE' (varE doc) '(.:) (stringE $ mkFieldName entityName field))
                                     (conFields con)
                   case lookups of
                     [] -> conE cname
