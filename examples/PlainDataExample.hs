@@ -26,6 +26,7 @@ $(deriveSerializedEntityWith
           _ -> fail $ "Unknown field: " ++ f
       , mkEntityFieldName = \e f -> case f of
           "Id" -> e ++ "Id"
+          "Type" -> e ++ "Type"
           "foo1_0" -> "Foo1Int"
           "foo1_1" -> "Foo1String"
           "foo2_0" -> "Foo2Int"

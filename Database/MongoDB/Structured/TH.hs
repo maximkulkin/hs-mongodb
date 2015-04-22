@@ -16,6 +16,8 @@ module Database.MongoDB.Structured.TH
   ) where
 
 import Control.Applicative ((<$>), (<*>), (<|>), pure)
+import Control.Monad (when)
+import Control.Monad.Trans.Writer
 import qualified Data.Bson as Bson
 import qualified Data.Char as Char
 import Data.List (foldl', stripPrefix)
@@ -73,10 +75,12 @@ deriveSerializedEntityWith DeriveSerializedEntityOptions{..} name = do
         f _tvbs cons = do
           let colName = mkCollectionName $ nameBase name
               keyTypeName = mkName $ nameBase name ++ "Id"
-              fields = filterDuplicateFields $ ("Id", (ConT keyTypeName), "_id") : (
-                foldl' (++) [] $
+              fields = filterDuplicateFields $ execWriter $ do
+                tell [("Id", ConT keyTypeName, "_id")]
+                when (length cons > 1) $
+                  tell [("Type", ConT ''String, sumTypeFieldName)]
+                tell $ foldl' (++) [] $
                   map (\con -> map (\(n, t) -> (n, t, mkFieldName entityName n)) $ conFields con) cons
-                )
 
           let keyTypeDec = TySynD keyTypeName [] (ConT ''Bson.ObjectId)
 #if MIN_VERSION_template_haskell(2, 9, 0)
