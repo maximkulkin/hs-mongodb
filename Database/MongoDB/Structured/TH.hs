@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell, QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE CPP #-}
 
 module Database.MongoDB.Structured.TH
   ( deriveSerializedEntity
@@ -76,7 +77,11 @@ deriveSerializedEntityWith DeriveSerializedEntityOptions{..} name = do
                 )
 
           let keyTypeDec = TySynD keyTypeName [] (ConT ''Bson.ObjectId)
+#if MIN_VERSION_template_haskell(2, 9, 0)
           keyDec <- tySynInstD ''Key $ pure $ TySynEqn [ConT name] (ConT keyTypeName)
+#else
+          keyDec <- tySynInstD ''Key [pure $ ConT name] (pure $ ConT keyTypeName)
+#endif
           entityFieldsDec <- mkEntityFieldsDec fields
           fieldNameBody <- mkFieldNameBody fields
           toBSONDocBody <- mkToBSONDocBody cons
